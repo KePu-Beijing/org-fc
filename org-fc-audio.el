@@ -33,6 +33,8 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'url)
+(require 'json)
 (require 'org-fc-core)
 (require 'org-fc-review)
 (require 'org-fc-review-data)
@@ -67,6 +69,32 @@
   :type 'string
   :group 'org-fc)
 
+(defcustom org-fc-audio-forvo-api-key nil
+  "API key for the Forvo service."
+  :type '(choice (const :tag "Unset" nil) string)
+  :group 'org-fc)
+
+(defcustom org-fc-audio-forvo-directory (expand-file-name "forvo" temporary-file-directory)
+  "Directory where Forvo audio files are stored."
+  :type 'directory
+  :group 'org-fc)
+
+(defcustom org-fc-audio-forvo-proxy nil
+  "HTTP proxy used for Forvo API calls in host:port format."
+  :type '(choice (const :tag "No proxy" nil) string)
+  :group 'org-fc)
+
+(defcustom org-fc-audio-forvo-languages
+  '("en" "de" "es" "fr" "ru" "ja" "zh" "ko")
+  "List of known language codes used when prompting for Forvo downloads."
+  :type '(repeat string)
+  :group 'org-fc)
+
+(defcustom org-fc-audio-forvo-property-prefix "FC_AUDIO_"
+  "Prefix of the property used for storing Forvo audio files."
+  :type 'string
+  :group 'org-fc)
+
 (defvar org-fc-audio-last-file nil)
 
 (defvar org-fc-audio--process nil)
@@ -75,6 +103,67 @@
   (completing-read
    "Position: "
    (org-fc-review-data-names (org-fc-review-data-parse '()))))
+
+(defun org-fc-audio--guess-language (word)
+  "Guess a language code for WORD based on its script.
+Return nil when the language cannot be determined."
+  (let* ((char (aref word 0))
+         (script (char-script char)))
+    (cdr (assq script
+               '((cyrillic . "ru")
+                 (hiragana . "ja")
+                 (katakana . "ja")
+                 (hangul . "ko"))))))
+
+(defun org-fc-audio-set-forvo ()
+  "Download audio from Forvo for the current heading.
+
+The most popular pronunciation is downloaded and stored in
+`org-fc-audio-forvo-directory'.  The property
+`org-fc-audio-forvo-property-prefix' followed by the language code is
+set to the downloaded file.  The Forvo API key is read from
+`org-fc-audio-forvo-api-key'.  Requests are sent through
+`org-fc-audio-forvo-proxy' when non-nil."
+  (interactive)
+  (unless org-fc-audio-forvo-api-key
+    (user-error "org-fc-audio-forvo-api-key is not set"))
+  (let* ((word (org-get-heading t t t t))
+         (lang (or (org-fc-audio--guess-language word)
+                   (completing-read "Language code: "
+                                    org-fc-audio-forvo-languages nil nil)))
+         (url-proxy-services (when org-fc-audio-forvo-proxy
+                               `(("http" . ,org-fc-audio-forvo-proxy)
+                                 ("https" . ,org-fc-audio-forvo-proxy))))
+         (url (format "https://apifree.forvo.com/key/%s/format/json/action/word-pronunciations/word/%s/language/%s"
+                      org-fc-audio-forvo-api-key
+                      (url-hexify-string word)
+                      lang))
+         (buf (url-retrieve-synchronously url t t)))
+    (unless buf
+      (user-error "Failed to retrieve data from Forvo"))
+    (with-current-buffer buf
+      (goto-char (point-min))
+      (re-search-forward "^$")
+      (let* ((json-object-type 'alist)
+             (json-array-type 'list)
+             (json-key-type 'symbol)
+             (data (json-read))
+             (items (alist-get 'items data))
+             (best (car (sort items (lambda (a b)
+                                      (> (alist-get 'num_votes a)
+                                         (alist-get 'num_votes b))))))
+             (audio-url (alist-get 'pathmp3 best))
+             (file-name (file-name-nondirectory audio-url))
+             (target-dir (file-name-as-directory
+                          (expand-file-name org-fc-audio-forvo-directory)))
+             (local-path (expand-file-name file-name target-dir)))
+        (kill-buffer buf)
+        (make-directory target-dir t)
+        (url-copy-file audio-url local-path t)
+        (org-set-property (format "%s%s" org-fc-audio-forvo-property-prefix (upcase lang))
+                          local-path)
+        (message "Saved Forvo audio to %s" local-path)
+        local-path)))
 
 (defun org-fc-audio-set-before-setup (file &optional position)
   "Set the before-setup audio property of POSITION of the current card to FILE.
