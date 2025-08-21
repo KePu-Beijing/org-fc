@@ -5,6 +5,13 @@ upcoming changes.
 In case a update to the org sources is needed, I'll add a changelog
 entry with updating instructions.
 
+** Unreleased
+
+*** Added
+
+- ~org-fc-audio-set-forvo~ downloads pronunciations from Forvo and
+  stores them on the current headline.
+
 ** 0.6.3
 
 *** Fixed
