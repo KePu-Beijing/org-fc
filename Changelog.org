@@ -5,6 +5,12 @@ upcoming changes.
 In case a update to the org sources is needed, I'll add a changelog
 entry with updating instructions.
 
+** Unreleased
+
+*** Added
+
+- Configurable HTTP proxy for Forvo API requests via `org-fc-forvo-http-proxy`.
+
 ** 0.6.2
 
 *** Fixed
