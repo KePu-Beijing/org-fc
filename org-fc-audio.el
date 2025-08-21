@@ -33,6 +33,10 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
+(require 'url)
+(require 'url-http)
+(require 'url-util)
 (require 'org-fc-core)
 (require 'org-fc-review)
 (require 'org-fc-review-data)
@@ -64,6 +68,22 @@
 
 (defcustom org-fc-audio-after-flip-prefix "FC_AUDIO_AFTER_FLIP"
   "Prefix of the property to use for storing after-flip audio files."
+  :type 'string
+  :group 'org-fc)
+
+(defcustom org-fc-audio-forvo-api-key nil
+  "API key used to access the Forvo API."
+  :type '(choice (const :tag "None" nil) string)
+  :group 'org-fc)
+
+(defcustom org-fc-audio-forvo-directory
+  (expand-file-name "org-fc-audio" user-emacs-directory)
+  "Directory where audio files downloaded from Forvo are stored."
+  :type 'directory
+  :group 'org-fc)
+
+(defcustom org-fc-audio-forvo-language "en"
+  "Language code used when requesting pronunciations from Forvo."
   :type 'string
   :group 'org-fc)
 
@@ -116,10 +136,52 @@ the card."
     (org-fc-audio--read-position-name)))
   (when (org-fc-entry-p)
     (if (or (null position) (string= position ""))
-        (org-set-property org-fc-audio-after-flip-property file)
+       (org-set-property org-fc-audio-after-flip-property file)
       (org-set-property
        (format "%s_%s" org-fc-audio-after-flip-prefix (upcase position))
        file))))
+
+(defun org-fc-audio-set-forvo (&optional position)
+  "Download pronunciation for the current heading from Forvo and link it.
+The downloaded file is stored in `org-fc-audio-forvo-directory'.
+When POSITION is nil, the audio is stored under
+`org-fc-audio-after-setup-property', otherwise under
+`org-fc-audio-after-setup-prefix' suffixed with POSITION."
+  (interactive (list (org-fc-audio--read-position-name)))
+  (unless org-fc-audio-forvo-api-key
+    (user-error "`org-fc-audio-forvo-api-key' is not set"))
+  (let* ((word (org-get-heading t t t t))
+         (url (format
+               "https://apifree.forvo.com/action/word-pronunciations/format/json/word/%s/language/%s/order/rate-desc/limit/1/key/%s"
+               (url-hexify-string word)
+               org-fc-audio-forvo-language
+               org-fc-audio-forvo-api-key))
+         (buf (url-retrieve-synchronously url t))
+         audio-url file)
+    (unless buf
+      (user-error "Failed to retrieve data from Forvo"))
+    (unwind-protect
+        (with-current-buffer buf
+          (goto-char url-http-end-of-headers)
+          (let* ((json-object-type 'alist)
+                 (json-array-type 'list)
+                 (data (json-read))
+                 (item (car (alist-get 'items data)))
+                 (path (alist-get 'pathmp3 item)))
+            (unless path
+              (user-error "No pronunciation found"))
+            (setq audio-url path)))
+      (kill-buffer buf))
+    (make-directory org-fc-audio-forvo-directory t)
+    (setq file (expand-file-name (concat (md5 audio-url) ".mp3")
+                                 org-fc-audio-forvo-directory))
+    (url-copy-file audio-url file t)
+    (if (or (null position) (string= position ""))
+        (org-set-property org-fc-audio-after-setup-property file)
+      (org-set-property
+       (format "%s_%s" org-fc-audio-after-setup-prefix (upcase position))
+       file))
+    file))
 
 (defun org-fc-audio-play (property &optional speed)
   "Play the audio of the current card.

@@ -5,6 +5,13 @@ upcoming changes.
 In case a update to the org sources is needed, I'll add a changelog
 entry with updating instructions.
 
+** 0.6.3
+
+*** Added
+
+- ~org-fc-audio-set-forvo~ downloads pronunciations from Forvo and
+  links them to cards via =:FC_AUDIO_= properties.
+
 ** 0.6.2
 
 *** Fixed

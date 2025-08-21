@@ -27,6 +27,13 @@ will prompt the user for a file and a position on of the current card.
 - ~org-fc-audio-set-before-setup~
 - ~org-fc-audio-set-after-setup~
 - ~org-fc-audio-set-after-flip~
+- ~org-fc-audio-set-forvo~
+
+The Forvo command downloads the most popular pronunciation of the
+current heading using the Forvo API.  The API key needs to be set in
+~org-fc-audio-forvo-api-key~ and files are stored in
+~org-fc-audio-forvo-directory~ (with the language configured via
+~org-fc-audio-forvo-language~).
 
 For most card types, =AFTER_SETUP= and =AFTER_FLIP= are sufficient.
 The only exception are text-input cards as those prompt the user for an answer
