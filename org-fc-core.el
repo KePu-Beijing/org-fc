@@ -114,6 +114,11 @@ Used to generate absolute paths to the awk scripts.")
   :type '(list string)
   :group 'org-fc)
 
+(defcustom org-fc-language-codes '("en" "de" "fr" "es" "it" "zh" "ja")
+  "List of language codes used when prompting for a language."
+  :type '(repeat string)
+  :group 'org-fc)
+
 ;;;; Spacing Parameters
 
 (defcustom org-fc-algorithm 'sm2-v1
@@ -217,6 +222,25 @@ indenting the current heading."
       (org-indent-add-properties
        (org-element-property :begin el)
        (org-element-property :end el)))))
+
+(defun org-fc--guess-language-code (text)
+  "Guess the ISO 639-1 language code for TEXT.
+Return nil when the language cannot be determined with confidence."
+  (cond
+   ;; Presence of Hiragana or Katakana implies Japanese
+   ((string-match-p "[\u3040-\u309f\u30a0-\u30ff]" text) "ja")
+   ;; CJK unified ideographs alone are ambiguous (could be Chinese or Japanese)
+   ((string-match-p "[\u4e00-\u9fff]" text) nil)
+   ;; A simple heuristic for English text using Latin letters
+   ((string-match-p "[A-Za-z]" text) "en")
+   (t nil)))
+
+(defun org-fc-detect-language-code (text)
+  "Determine language code for TEXT.
+Try to guess the language automatically; if guessing fails, prompt
+the user to choose one from `org-fc-language-codes'."
+  (or (org-fc--guess-language-code text)
+      (completing-read "Language code: " org-fc-language-codes nil t)))
 
 (defmacro org-fc-with-point-at-entry (&rest body)
   "Execute BODY with point at the card heading.

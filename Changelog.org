@@ -5,6 +5,12 @@ upcoming changes.
 In case a update to the org sources is needed, I'll add a changelog
 entry with updating instructions.
 
+** 0.6.4
+
+*** Added
+
+- Automatically detect language codes and prompt the user when detection is ambiguous.
+
 ** 0.6.3
 
 *** Fixed
